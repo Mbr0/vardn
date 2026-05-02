@@ -34,7 +34,7 @@
 	<string>Find and sync with your other devices on this network.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_todop2p._tcp</string>
+		<string>_vardn._tcp</string>
 	</array>
 </dict>
 </plist>

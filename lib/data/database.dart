@@ -84,7 +84,7 @@ class Peers extends Table {
 @DriftDatabase(tables: [TodoLists, Todos, Tags, TodoTags, ProcessedEvents, Peers])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
-      : super(executor ?? driftDatabase(name: 'todo_p2p'));
+      : super(executor ?? driftDatabase(name: 'vardn'));
 
   @override
   int get schemaVersion => 3;

@@ -7,7 +7,7 @@ import 'package:nsd/nsd.dart';
 import '../identity/device_identity.dart';
 import 'peer_endpoint.dart';
 
-const _serviceType = '_todop2p._tcp';
+const _serviceType = '_vardn._tcp';
 
 class DiscoveredPeer {
   DiscoveredPeer({required this.deviceId, required this.endpoint, required this.displayName});

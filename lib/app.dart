@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/theme/app_theme.dart';
 
-class TodoP2PApp extends ConsumerWidget {
-  const TodoP2PApp({super.key});
+class VardnApp extends ConsumerWidget {
+  const VardnApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      title: 'Todo P2P',
+      title: 'Vardn',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

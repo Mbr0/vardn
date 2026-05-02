@@ -1,4 +1,4 @@
-package studio.canopy.todo_p2p
+package studio.canopy.vardn
 
 import io.flutter.embedding.android.FlutterActivity
 

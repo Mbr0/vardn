@@ -78,7 +78,7 @@ class DevicesScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           _SectionHeader('Discovered on LAN (${discovered.length})'),
           if (discovered.isEmpty)
-            const _EmptyCard('No other Todo P2P devices on this network.')
+            const _EmptyCard('No other Vardn devices on this network.')
           else
             ...discovered.map((d) => _DiscoveredTile(
                   peer: d,

@@ -1,5 +1,5 @@
-name: todo_p2p
-description: "Local-first todo app with peer-to-peer sync over LAN (mDNS + HTTP event log)."
+name: vardn
+description: "Vardn — local-first task app with peer-to-peer sync over LAN (mDNS + HTTP event log)."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
