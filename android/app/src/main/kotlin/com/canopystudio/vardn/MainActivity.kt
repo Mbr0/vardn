@@ -1,4 +1,4 @@
-package studio.canopy.vardn
+package com.canopystudio.vardn
 
 import io.flutter.embedding.android.FlutterActivity
 

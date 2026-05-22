@@ -1,17 +1,34 @@
-# todo_p2p
+# Vardn
 
-Local-first todo app that syncs P2P via Syncthing event files.
+Local-first task app with peer-to-peer sync over LAN (mDNS + HTTP event log).
 
-## Getting Started
+A Canopy Studio product.
 
-This project is a starting point for a Flutter application.
+## Stack
 
-A few resources to get you started if this is your first Flutter project:
+- Flutter + Drift (SQLite)
+- LAN peer discovery via `_vardn._tcp`
+- Event-log sync between paired devices
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Development
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+flutter run
+```
+
+## Release
+
+```bash
+./release.sh
+```
+
+Builds iOS IPA and Android AAB. See `release.sh` for output paths.
+
+## Identifiers
+
+| Platform | Value |
+|---|---|
+| Package | `vardn` |
+| iOS / Android | `com.canopystudio.vardn` |
+| Display name | Vardn |

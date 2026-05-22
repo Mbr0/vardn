@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Local-first todo app that syncs P2P via Syncthing event files.",
+    "description": "Vardn — local-first task app with peer-to-peer sync over LAN.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
