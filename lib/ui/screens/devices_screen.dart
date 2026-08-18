@@ -67,6 +67,7 @@ class DevicesScreen extends ConsumerWidget {
                   final engine = await ref.read(syncEngineProvider.future);
                   await engine.unpair(p.id);
                 },
+                onEditRemote: () => _editRemoteAddress(context, ref, p),
               ),
             ),
           const SizedBox(height: 16),
@@ -74,6 +75,12 @@ class DevicesScreen extends ConsumerWidget {
             icon: const Icon(Icons.qr_code_scanner),
             label: const Text('Pair a device'),
             onPressed: () => _showPairFlow(context, ref),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.content_paste),
+            label: const Text('Pair from pasted invite'),
+            onPressed: () => _showManualPairFlow(context, ref),
           ),
           const SizedBox(height: 24),
           _SectionHeader('Discovered on LAN (${discovered.length})'),
@@ -87,7 +94,7 @@ class DevicesScreen extends ConsumerWidget {
                     final engine = await ref.read(syncEngineProvider.future);
                     await engine.savePeer(
                       id: d.deviceId,
-                      publicKey: '', // discovered via mDNS, key from txt next iteration
+                      publicKey: d.publicKey,
                       displayName: d.displayName,
                       endpoint: d.endpoint,
                     );
@@ -103,7 +110,47 @@ class DevicesScreen extends ConsumerWidget {
       MaterialPageRoute(builder: (_) => const _PairScannerScreen()),
     );
     if (scanned == null) return;
-    final invite = _PairInvite.tryParse(scanned);
+    if (!context.mounted) return;
+    await _pairFromInvite(context, ref, scanned);
+  }
+
+  /// Pair without a camera: paste the invite JSON (from "Copy invite JSON" on
+  /// the other device, or printed by the headless vardn_node on startup).
+  Future<void> _showManualPairFlow(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final raw = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Pair from invite'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: '{"v":1,"id":...}',
+            helperText: 'Paste the invite JSON from the other device',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('Pair'),
+          ),
+        ],
+      ),
+    );
+    if (raw == null || raw.trim().isEmpty) return;
+    if (!context.mounted) return;
+    await _pairFromInvite(context, ref, raw.trim());
+  }
+
+  Future<void> _pairFromInvite(
+      BuildContext context, WidgetRef ref, String raw) async {
+    final invite = _PairInvite.tryParse(raw);
     if (invite == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -125,6 +172,56 @@ class DevicesScreen extends ConsumerWidget {
         SnackBar(content: Text('Paired with ${invite.displayName}')),
       );
     }
+  }
+
+  /// Set/clear a peer's remote (Tailscale) address, used to reach it when
+  /// it isn't visible on the local network.
+  Future<void> _editRemoteAddress(
+      BuildContext context, WidgetRef ref, Peer peer) async {
+    final controller = TextEditingController(text: peer.staticEndpoint ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remote address'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'my-server.tailnet.ts.net:8484',
+            helperText:
+                'host:port reachable when away from home (e.g. Tailscale '
+                'IP or MagicDNS name). Leave empty to clear.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    final engine = await ref.read(syncEngineProvider.future);
+    if (result.isEmpty) {
+      await engine.setStaticEndpoint(peer.id, null);
+      return;
+    }
+    final endpoint = PeerEndpoint.tryParse(result);
+    if (endpoint == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid address — use host:port')),
+        );
+      }
+      return;
+    }
+    await engine.setStaticEndpoint(peer.id, endpoint);
+    await engine.syncAllOnce();
   }
 }
 
@@ -273,11 +370,13 @@ class _PairedPeerTile extends StatelessWidget {
     required this.peer,
     required this.isOnline,
     required this.onUnpair,
+    required this.onEditRemote,
   });
 
   final Peer peer;
   final bool isOnline;
   final VoidCallback onUnpair;
+  final VoidCallback onEditRemote;
 
   @override
   Widget build(BuildContext context) {
@@ -291,15 +390,35 @@ class _PairedPeerTile extends StatelessWidget {
         subtitle: Text(
           [
             if (peer.lastEndpoint != null) peer.lastEndpoint!,
+            if (peer.staticEndpoint != null) 'remote: ${peer.staticEndpoint}',
             if (peer.lastSeenAt != null)
               'seen ${DateFormat.yMd().add_Hm().format(peer.lastSeenAt!.toLocal())}',
           ].join(' · '),
           style: const TextStyle(fontSize: 12),
         ),
-        trailing: IconButton(
-          icon: const Icon(Icons.link_off),
-          tooltip: 'Unpair',
-          onPressed: onUnpair,
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'remote') onEditRemote();
+            if (value == 'unpair') onUnpair();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'remote',
+              child: ListTile(
+                leading: Icon(Icons.vpn_lock),
+                title: Text('Remote address…'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            PopupMenuItem(
+              value: 'unpair',
+              child: ListTile(
+                leading: Icon(Icons.link_off),
+                title: Text('Unpair'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ],
         ),
       ),
     );

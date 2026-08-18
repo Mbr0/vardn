@@ -1,0 +1,20 @@
+name: vardn_node
+description: "Headless always-on Vardn peer — a store-and-forward event relay for syncing over Tailscale/LAN without both phones being online."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  args: ^2.6.0
+  crypto: ^3.0.6
+  cryptography: ^2.9.0
+  path: ^1.9.1
+  qr: ^3.0.2
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.0

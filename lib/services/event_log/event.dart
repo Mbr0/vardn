@@ -6,7 +6,13 @@ enum EventType {
   listUpdated('list.updated'),
   listDeleted('list.deleted'),
   tagAdded('todo.tag.added'),
-  tagRemoved('todo.tag.removed');
+  tagRemoved('todo.tag.removed'),
+  noteCreated('note.created'),
+  noteUpdated('note.updated'),
+  noteDeleted('note.deleted'),
+  blockCreated('note.block.created'),
+  blockUpdated('note.block.updated'),
+  blockDeleted('note.block.deleted');
 
   const EventType(this.wire);
   final String wire;

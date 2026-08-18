@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart' show StateProvider;
 
 import '../data/database.dart';
+import 'blobs/blob_store.dart';
 import 'event_log/device_id.dart';
 import 'event_log/event_writer.dart';
 import 'identity/device_identity.dart';
@@ -42,16 +43,22 @@ final eventApplierProvider = FutureProvider<EventApplier>((ref) async {
   return EventApplier(db: db, deviceId: deviceId);
 });
 
+final blobStoreProvider = FutureProvider<BlobStore>((ref) async {
+  return BlobStore.create();
+});
+
 final syncEngineProvider = FutureProvider<SyncEngine>((ref) async {
   final db = ref.watch(databaseProvider);
   final identity = await ref.watch(deviceIdentityProvider.future);
   final writer = await ref.watch(eventWriterProvider.future);
   final applier = await ref.watch(eventApplierProvider.future);
+  final blobs = await ref.watch(blobStoreProvider.future);
   final engine = SyncEngine(
     db: db,
     identity: identity,
     writer: writer,
     applier: applier,
+    blobs: blobs,
   );
   ref.onDispose(engine.dispose);
   return engine;
@@ -126,6 +133,52 @@ final listsProvider = StreamProvider<List<TodoList>>((ref) {
   return (db.select(db.todoLists)
         ..where((t) => t.deletedAt.isNull())
         ..orderBy([(t) => OrderingTerm.asc(t.name)]))
+      .watch();
+});
+
+/// Search text for the notes tab.
+final noteSearchProvider = StateProvider<String>((ref) => '');
+
+/// Live notes, pinned first then most recently updated. Search matches the
+/// title or any block's content.
+final notesProvider = StreamProvider<List<Note>>((ref) {
+  final db = ref.watch(databaseProvider);
+  final search = ref.watch(noteSearchProvider).trim();
+
+  final query = db.select(db.notes)..where((t) => t.deletedAt.isNull());
+  if (search.isNotEmpty) {
+    final needle = '%$search%';
+    final matching = db.selectOnly(db.noteBlocks)
+      ..addColumns([db.noteBlocks.noteId])
+      ..where(db.noteBlocks.content.like(needle) &
+          db.noteBlocks.deletedAt.isNull());
+    query.where((t) => t.title.like(needle) | t.id.isInQuery(matching));
+  }
+  query.orderBy([
+    (t) => OrderingTerm.desc(t.pinned),
+    (t) => OrderingTerm.desc(t.updatedAt),
+  ]);
+  return query.watch();
+});
+
+/// One live note (null once deleted).
+final noteProvider = StreamProvider.family<Note?, String>((ref, noteId) {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.notes)
+        ..where((t) => t.id.equals(noteId) & t.deletedAt.isNull()))
+      .watchSingleOrNull();
+});
+
+/// Live, ordered blocks of one note.
+final noteBlocksProvider =
+    StreamProvider.family<List<NoteBlock>, String>((ref, noteId) {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.noteBlocks)
+        ..where((t) => t.noteId.equals(noteId) & t.deletedAt.isNull())
+        ..orderBy([
+          (t) => OrderingTerm.asc(t.position),
+          (t) => OrderingTerm.asc(t.createdAt),
+        ]))
       .watch();
 });
 
