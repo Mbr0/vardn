@@ -40,6 +40,12 @@ flutter run
 
 Builds iOS IPA and Android AAB. See `release.sh` for output paths.
 
+Android release builds are signed with the upload key configured in
+`android/key.properties` (gitignored — see the comments in
+`android/app/build.gradle.kts` for the expected keys and the `keytool`
+command to generate a keystore). Without that file, release builds fall
+back to debug signing so `flutter run --release` still works.
+
 ## Identifiers
 
 | Platform | Value |

@@ -38,6 +38,7 @@ class SyncEngine {
 
   StreamSubscription<List<DiscoveredPeer>>? _discoverySub;
   Timer? _periodic;
+  Timer? _maintenance;
 
   Future<void> start() async {
     await server.start();
@@ -50,10 +51,15 @@ class SyncEngine {
     });
     // Periodic re-sync in case mDNS events are missed.
     _periodic = Timer.periodic(const Duration(seconds: 30), (_) => syncAllOnce());
+    // Storage housekeeping: shortly after boot, then twice a day.
+    _maintenance = Timer.periodic(
+        const Duration(hours: 12), (_) => runMaintenance());
+    Timer(const Duration(minutes: 2), runMaintenance);
   }
 
   Future<void> stop() async {
     _periodic?.cancel();
+    _maintenance?.cancel();
     await _discoverySub?.cancel();
     await discovery.stop();
     await server.stop();
@@ -247,6 +253,40 @@ class SyncEngine {
             .timeout(const Duration(seconds: 30));
       } catch (_) {/* peer offline — the pull side will self-heal */}
     }
+  }
+
+  /// Storage housekeeping, safe to run at any time:
+  ///  - deletes blobs no live image block references (with a 1-day grace
+  ///    period for freshly written files);
+  ///  - prunes our own event files that every currently-paired peer has
+  ///    already received AND that are older than 30 days — so a fresh device
+  ///    can still bootstrap recent history from us, and full history from an
+  ///    always-on node (which never prunes).
+  Future<void> runMaintenance() async {
+    try {
+      final imageBlocks = await (db.select(db.noteBlocks)
+            ..where((t) => t.type.equals('image')))
+          .get();
+      final referenced = {
+        for (final b in imageBlocks)
+          if (b.deletedAt == null && BlobStore.looksLikeHash(b.content))
+            b.content,
+      };
+      await blobs.deleteUnreferenced(referenced);
+    } catch (_) {/* never let housekeeping break sync */}
+
+    try {
+      final paired = await db.select(db.peers).get();
+      if (paired.isEmpty) return; // nobody confirmed delivery — keep all
+      final delivered =
+          paired.map((peer) => peer.lastPushMs).reduce((a, b) => a < b ? a : b);
+      final thirtyDaysAgo = DateTime.now()
+          .toUtc()
+          .subtract(const Duration(days: 30))
+          .millisecondsSinceEpoch;
+      final cutoff = delivered < thirtyDaysAgo ? delivered : thirtyDaysAgo;
+      if (cutoff > 0) await writer.pruneBefore(cutoff);
+    } catch (_) {/* never let housekeeping break sync */}
   }
 
   Future<void> _ingestFromPeer(List<Map<String, Object?>> events) async {

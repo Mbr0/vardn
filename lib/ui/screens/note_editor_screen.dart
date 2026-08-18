@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/database.dart';
 import '../../services/blobs/blob_store.dart';
@@ -296,6 +298,12 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
                   size: 18, color: Theme.of(context).colorScheme.primary),
             ),
           Expanded(child: field),
+          if (block.type == 'link' && block.content.trim().isNotEmpty)
+            IconButton(
+              tooltip: 'Open link',
+              icon: const Icon(Icons.open_in_new, size: 18),
+              onPressed: () => _openLink(context, block.content),
+            ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert,
                 size: 18, color: Theme.of(context).colorScheme.outlineVariant),
@@ -324,6 +332,20 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
     );
   }
 
+  Future<void> _openLink(BuildContext context, String raw) async {
+    var text = raw.trim();
+    if (!text.contains('://')) text = 'https://$text';
+    final uri = Uri.tryParse(text);
+    final ok = uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link')),
+      );
+    }
+  }
+
   Widget _buildImage(BuildContext context, NoteBlock block) {
     final storeAsync = ref.watch(blobStoreProvider);
     final store = storeAsync.value;
@@ -348,7 +370,18 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: file != null && file.existsSync()
-                  ? Image.file(file, fit: BoxFit.fitWidth)
+                  ? GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              _ImageViewerScreen(file: file, tag: block.id),
+                        ),
+                      ),
+                      child: Hero(
+                        tag: block.id,
+                        child: Image.file(file, fit: BoxFit.fitWidth),
+                      ),
+                    )
                   : Container(
                       height: 140,
                       color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -377,6 +410,33 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Full-screen, pinch-zoomable image view. Tap anywhere to close.
+class _ImageViewerScreen extends StatelessWidget {
+  const _ImageViewerScreen({required this.file, required this.tag});
+  final File file;
+  final Object tag;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Center(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Hero(tag: tag, child: Image.file(file)),
+          ),
+        ),
       ),
     );
   }

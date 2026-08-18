@@ -59,6 +59,25 @@ class EventWriter {
     return out;
   }
 
+  /// Deletes our own event files with timestamps strictly before [cutoffMs].
+  /// Only call with a cutoff every currently-paired peer has already been
+  /// pushed past — pruned events can never be served again. Returns the
+  /// number of files removed.
+  Future<int> pruneBefore(int cutoffMs) async {
+    if (!await directory.exists()) return 0;
+    var removed = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      final ts = int.tryParse(p.basename(entity.path).split('-').first);
+      if (ts == null || ts >= cutoffMs) continue;
+      try {
+        await entity.delete();
+        removed++;
+      } catch (_) {/* keep going */}
+    }
+    return removed;
+  }
+
   /// Highest event timestamp we've emitted (ms). Useful as our own watermark.
   Future<int> latestTimestampMs() async {
     if (!await directory.exists()) return 0;

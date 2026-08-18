@@ -63,4 +63,31 @@ class BlobStore {
     if (!await file.exists()) return null;
     return file.readAsBytes();
   }
+
+  /// Deletes blobs whose hash is not in [referenced], plus stray temp files.
+  /// Files newer than [minAge] are kept — a blob may be written moments
+  /// before the block event referencing it lands. Returns bytes freed.
+  Future<int> deleteUnreferenced(
+    Set<String> referenced, {
+    Duration minAge = const Duration(days: 1),
+  }) async {
+    if (!await directory.exists()) return 0;
+    final threshold = DateTime.now().subtract(minAge);
+    var freed = 0;
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = p.basename(entity.path);
+      final isStrayTmp = name.endsWith('.tmp');
+      if (!isStrayTmp && (!looksLikeHash(name) || referenced.contains(name))) {
+        continue;
+      }
+      try {
+        final stat = await entity.stat();
+        if (stat.modified.isAfter(threshold)) continue;
+        freed += stat.size;
+        await entity.delete();
+      } catch (_) {/* keep going */}
+    }
+    return freed;
+  }
 }
