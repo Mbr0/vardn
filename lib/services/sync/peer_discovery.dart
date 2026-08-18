@@ -10,10 +10,16 @@ import 'peer_endpoint.dart';
 const _serviceType = '_vardn._tcp';
 
 class DiscoveredPeer {
-  DiscoveredPeer({required this.deviceId, required this.endpoint, required this.displayName});
+  DiscoveredPeer({
+    required this.deviceId,
+    required this.endpoint,
+    required this.displayName,
+    this.publicKey = '',
+  });
   final String deviceId;
   final PeerEndpoint endpoint;
   final String displayName;
+  final String publicKey; // base64url X25519, from the mDNS TXT record
 }
 
 /// Announces this device on the LAN via mDNS and watches for other instances.
@@ -80,6 +86,7 @@ class PeerDiscovery {
       deviceId: id,
       endpoint: PeerEndpoint(host: host, port: port),
       displayName: _readUtf8(txt['name']) ?? id.substring(0, 6),
+      publicKey: _readUtf8(txt['pk']) ?? '',
     );
     _emit();
   }

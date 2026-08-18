@@ -1,6 +1,8 @@
 # Vardn
 
-Local-first task app with peer-to-peer sync over LAN (mDNS + HTTP event log).
+Local-first task app with peer-to-peer sync — over the LAN (mDNS + HTTP event
+log) and, away from home, over [Tailscale](https://tailscale.com) via static
+peer addresses and/or the headless [`node/`](node/README.md) relay.
 
 A Canopy Studio product.
 
@@ -9,6 +11,15 @@ A Canopy Studio product.
 - Flutter + Drift (SQLite)
 - LAN peer discovery via `_vardn._tcp`
 - Event-log sync between paired devices
+- Optional always-on relay peer (`node/`, pure Dart) for sync when devices
+  aren't online at the same time
+
+## Syncing away from home
+
+1. Put your devices (and optionally a home server) on the same tailnet.
+2. Either set a peer's **Remote address…** (Devices → ⋮ on a paired device)
+   to its Tailscale `host:port`, or run `vardn_node` on the server and pair
+   both phones with it — see [node/README.md](node/README.md).
 
 ## Development
 

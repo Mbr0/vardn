@@ -94,16 +94,34 @@ class SyncEngine {
     await (db.delete(db.peers)..where((t) => t.id.equals(peerId))).go();
   }
 
-  /// Trigger a sync against every peer we've ever discovered, using their last
-  /// known endpoint. No-op for peers we have no endpoint for.
+  /// Set (or clear, with null) a user-configured `host:port` for a peer —
+  /// typically its Tailscale IP or MagicDNS name — used when the peer is not
+  /// reachable via mDNS (i.e. away from the home LAN).
+  Future<void> setStaticEndpoint(String peerId, PeerEndpoint? endpoint) async {
+    await (db.update(db.peers)..where((t) => t.id.equals(peerId))).write(
+      PeersCompanion(staticEndpoint: Value(endpoint?.toString())),
+    );
+  }
+
+  /// Trigger a sync against every paired peer. Tries, in order: the live mDNS
+  /// endpoint, the configured static (Tailscale) endpoint, then the last known
+  /// LAN endpoint — stopping at the first that responds.
   Future<void> syncAllOnce() async {
     final paired = await db.select(db.peers).get();
     final discovered = {for (final p in discovery.current) p.deviceId: p};
     for (final peer in paired) {
-      final live = discovered[peer.id];
-      final endpoint = live?.endpoint ?? _parseEndpoint(peer.lastEndpoint);
-      if (endpoint == null) continue;
-      await _exchangeWith(peer.id, endpoint);
+      final candidates = <PeerEndpoint>[
+        if (discovered[peer.id] != null) discovered[peer.id]!.endpoint,
+        if (PeerEndpoint.tryParse(peer.staticEndpoint) != null)
+          PeerEndpoint.tryParse(peer.staticEndpoint)!,
+        if (PeerEndpoint.tryParse(peer.lastEndpoint) != null)
+          PeerEndpoint.tryParse(peer.lastEndpoint)!,
+      ];
+      final seen = <String>{};
+      for (final endpoint in candidates) {
+        if (!seen.add(endpoint.toString())) continue;
+        if (await _exchangeWith(peer.id, endpoint)) break;
+      }
     }
   }
 
@@ -117,11 +135,12 @@ class SyncEngine {
   }
 
   /// Pull peer events newer than our watermark, then push our events newer
-  /// than theirs.
-  Future<void> _exchangeWith(String peerId, PeerEndpoint endpoint) async {
+  /// than theirs. Returns true if the endpoint responded to either leg.
+  Future<bool> _exchangeWith(String peerId, PeerEndpoint endpoint) async {
     final peer = await (db.select(db.peers)..where((t) => t.id.equals(peerId)))
         .getSingleOrNull();
-    if (peer == null) return; // not paired
+    if (peer == null) return false; // not paired
+    var reachable = false;
 
     // PULL
     try {
@@ -130,6 +149,7 @@ class SyncEngine {
               queryParameters: {'since': peer.lastSyncMs.toString()}))
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
+        reachable = true;
         final body = jsonDecode(res.body) as Map<String, Object?>;
         final events = ((body['events'] as List?) ?? const [])
             .cast<Map<String, Object?>>();
@@ -151,32 +171,25 @@ class SyncEngine {
     // PUSH events newer than our last push watermark for this peer.
     try {
       final ours = await writer.readSince(peer.lastPushMs);
-      if (ours.isEmpty) return;
+      if (ours.isEmpty) return reachable;
       final res = await http
           .post(endpoint.uri('/events'),
               headers: {'content-type': 'application/json'},
               body: jsonEncode({'events': ours}))
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
+        reachable = true;
         final ourLatest = await writer.latestTimestampMs();
         await (db.update(db.peers)..where((t) => t.id.equals(peerId))).write(
           PeersCompanion(lastPushMs: Value(ourLatest)),
         );
       }
     } catch (_) {/* peer offline */}
+    return reachable;
   }
 
   Future<void> _ingestFromPeer(List<Map<String, Object?>> events) async {
     if (events.isEmpty) return;
     await applier.applyAll(events);
-  }
-
-  static PeerEndpoint? _parseEndpoint(String? s) {
-    if (s == null) return null;
-    final parts = s.split(':');
-    if (parts.length != 2) return null;
-    final port = int.tryParse(parts[1]);
-    if (port == null) return null;
-    return PeerEndpoint(host: parts[0], port: port);
   }
 }

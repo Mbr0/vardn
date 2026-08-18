@@ -1792,6 +1792,17 @@ class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _staticEndpointMeta = const VerificationMeta(
+    'staticEndpoint',
+  );
+  @override
+  late final GeneratedColumn<String> staticEndpoint = GeneratedColumn<String>(
+    'static_endpoint',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastSyncMsMeta = const VerificationMeta(
     'lastSyncMs',
   );
@@ -1845,6 +1856,7 @@ class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
     publicKey,
     displayName,
     lastEndpoint,
+    staticEndpoint,
     lastSyncMs,
     lastPushMs,
     pairedAt,
@@ -1890,6 +1902,15 @@ class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
         lastEndpoint.isAcceptableOrUnknown(
           data['last_endpoint']!,
           _lastEndpointMeta,
+        ),
+      );
+    }
+    if (data.containsKey('static_endpoint')) {
+      context.handle(
+        _staticEndpointMeta,
+        staticEndpoint.isAcceptableOrUnknown(
+          data['static_endpoint']!,
+          _staticEndpointMeta,
         ),
       );
     }
@@ -1951,6 +1972,10 @@ class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
         DriftSqlType.string,
         data['${effectivePrefix}last_endpoint'],
       ),
+      staticEndpoint: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}static_endpoint'],
+      ),
       lastSyncMs: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}last_sync_ms'],
@@ -1981,6 +2006,7 @@ class Peer extends DataClass implements Insertable<Peer> {
   final String publicKey;
   final String displayName;
   final String? lastEndpoint;
+  final String? staticEndpoint;
   final int lastSyncMs;
   final int lastPushMs;
   final DateTime pairedAt;
@@ -1990,6 +2016,7 @@ class Peer extends DataClass implements Insertable<Peer> {
     required this.publicKey,
     required this.displayName,
     this.lastEndpoint,
+    this.staticEndpoint,
     required this.lastSyncMs,
     required this.lastPushMs,
     required this.pairedAt,
@@ -2003,6 +2030,9 @@ class Peer extends DataClass implements Insertable<Peer> {
     map['display_name'] = Variable<String>(displayName);
     if (!nullToAbsent || lastEndpoint != null) {
       map['last_endpoint'] = Variable<String>(lastEndpoint);
+    }
+    if (!nullToAbsent || staticEndpoint != null) {
+      map['static_endpoint'] = Variable<String>(staticEndpoint);
     }
     map['last_sync_ms'] = Variable<int>(lastSyncMs);
     map['last_push_ms'] = Variable<int>(lastPushMs);
@@ -2021,6 +2051,9 @@ class Peer extends DataClass implements Insertable<Peer> {
       lastEndpoint: lastEndpoint == null && nullToAbsent
           ? const Value.absent()
           : Value(lastEndpoint),
+      staticEndpoint: staticEndpoint == null && nullToAbsent
+          ? const Value.absent()
+          : Value(staticEndpoint),
       lastSyncMs: Value(lastSyncMs),
       lastPushMs: Value(lastPushMs),
       pairedAt: Value(pairedAt),
@@ -2040,6 +2073,7 @@ class Peer extends DataClass implements Insertable<Peer> {
       publicKey: serializer.fromJson<String>(json['publicKey']),
       displayName: serializer.fromJson<String>(json['displayName']),
       lastEndpoint: serializer.fromJson<String?>(json['lastEndpoint']),
+      staticEndpoint: serializer.fromJson<String?>(json['staticEndpoint']),
       lastSyncMs: serializer.fromJson<int>(json['lastSyncMs']),
       lastPushMs: serializer.fromJson<int>(json['lastPushMs']),
       pairedAt: serializer.fromJson<DateTime>(json['pairedAt']),
@@ -2054,6 +2088,7 @@ class Peer extends DataClass implements Insertable<Peer> {
       'publicKey': serializer.toJson<String>(publicKey),
       'displayName': serializer.toJson<String>(displayName),
       'lastEndpoint': serializer.toJson<String?>(lastEndpoint),
+      'staticEndpoint': serializer.toJson<String?>(staticEndpoint),
       'lastSyncMs': serializer.toJson<int>(lastSyncMs),
       'lastPushMs': serializer.toJson<int>(lastPushMs),
       'pairedAt': serializer.toJson<DateTime>(pairedAt),
@@ -2066,6 +2101,7 @@ class Peer extends DataClass implements Insertable<Peer> {
     String? publicKey,
     String? displayName,
     Value<String?> lastEndpoint = const Value.absent(),
+    Value<String?> staticEndpoint = const Value.absent(),
     int? lastSyncMs,
     int? lastPushMs,
     DateTime? pairedAt,
@@ -2075,6 +2111,9 @@ class Peer extends DataClass implements Insertable<Peer> {
     publicKey: publicKey ?? this.publicKey,
     displayName: displayName ?? this.displayName,
     lastEndpoint: lastEndpoint.present ? lastEndpoint.value : this.lastEndpoint,
+    staticEndpoint: staticEndpoint.present
+        ? staticEndpoint.value
+        : this.staticEndpoint,
     lastSyncMs: lastSyncMs ?? this.lastSyncMs,
     lastPushMs: lastPushMs ?? this.lastPushMs,
     pairedAt: pairedAt ?? this.pairedAt,
@@ -2090,6 +2129,9 @@ class Peer extends DataClass implements Insertable<Peer> {
       lastEndpoint: data.lastEndpoint.present
           ? data.lastEndpoint.value
           : this.lastEndpoint,
+      staticEndpoint: data.staticEndpoint.present
+          ? data.staticEndpoint.value
+          : this.staticEndpoint,
       lastSyncMs: data.lastSyncMs.present
           ? data.lastSyncMs.value
           : this.lastSyncMs,
@@ -2110,6 +2152,7 @@ class Peer extends DataClass implements Insertable<Peer> {
           ..write('publicKey: $publicKey, ')
           ..write('displayName: $displayName, ')
           ..write('lastEndpoint: $lastEndpoint, ')
+          ..write('staticEndpoint: $staticEndpoint, ')
           ..write('lastSyncMs: $lastSyncMs, ')
           ..write('lastPushMs: $lastPushMs, ')
           ..write('pairedAt: $pairedAt, ')
@@ -2124,6 +2167,7 @@ class Peer extends DataClass implements Insertable<Peer> {
     publicKey,
     displayName,
     lastEndpoint,
+    staticEndpoint,
     lastSyncMs,
     lastPushMs,
     pairedAt,
@@ -2137,6 +2181,7 @@ class Peer extends DataClass implements Insertable<Peer> {
           other.publicKey == this.publicKey &&
           other.displayName == this.displayName &&
           other.lastEndpoint == this.lastEndpoint &&
+          other.staticEndpoint == this.staticEndpoint &&
           other.lastSyncMs == this.lastSyncMs &&
           other.lastPushMs == this.lastPushMs &&
           other.pairedAt == this.pairedAt &&
@@ -2148,6 +2193,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
   final Value<String> publicKey;
   final Value<String> displayName;
   final Value<String?> lastEndpoint;
+  final Value<String?> staticEndpoint;
   final Value<int> lastSyncMs;
   final Value<int> lastPushMs;
   final Value<DateTime> pairedAt;
@@ -2158,6 +2204,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
     this.publicKey = const Value.absent(),
     this.displayName = const Value.absent(),
     this.lastEndpoint = const Value.absent(),
+    this.staticEndpoint = const Value.absent(),
     this.lastSyncMs = const Value.absent(),
     this.lastPushMs = const Value.absent(),
     this.pairedAt = const Value.absent(),
@@ -2169,6 +2216,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
     required String publicKey,
     this.displayName = const Value.absent(),
     this.lastEndpoint = const Value.absent(),
+    this.staticEndpoint = const Value.absent(),
     this.lastSyncMs = const Value.absent(),
     this.lastPushMs = const Value.absent(),
     this.pairedAt = const Value.absent(),
@@ -2181,6 +2229,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
     Expression<String>? publicKey,
     Expression<String>? displayName,
     Expression<String>? lastEndpoint,
+    Expression<String>? staticEndpoint,
     Expression<int>? lastSyncMs,
     Expression<int>? lastPushMs,
     Expression<DateTime>? pairedAt,
@@ -2192,6 +2241,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
       if (publicKey != null) 'public_key': publicKey,
       if (displayName != null) 'display_name': displayName,
       if (lastEndpoint != null) 'last_endpoint': lastEndpoint,
+      if (staticEndpoint != null) 'static_endpoint': staticEndpoint,
       if (lastSyncMs != null) 'last_sync_ms': lastSyncMs,
       if (lastPushMs != null) 'last_push_ms': lastPushMs,
       if (pairedAt != null) 'paired_at': pairedAt,
@@ -2205,6 +2255,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
     Value<String>? publicKey,
     Value<String>? displayName,
     Value<String?>? lastEndpoint,
+    Value<String?>? staticEndpoint,
     Value<int>? lastSyncMs,
     Value<int>? lastPushMs,
     Value<DateTime>? pairedAt,
@@ -2216,6 +2267,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
       publicKey: publicKey ?? this.publicKey,
       displayName: displayName ?? this.displayName,
       lastEndpoint: lastEndpoint ?? this.lastEndpoint,
+      staticEndpoint: staticEndpoint ?? this.staticEndpoint,
       lastSyncMs: lastSyncMs ?? this.lastSyncMs,
       lastPushMs: lastPushMs ?? this.lastPushMs,
       pairedAt: pairedAt ?? this.pairedAt,
@@ -2238,6 +2290,9 @@ class PeersCompanion extends UpdateCompanion<Peer> {
     }
     if (lastEndpoint.present) {
       map['last_endpoint'] = Variable<String>(lastEndpoint.value);
+    }
+    if (staticEndpoint.present) {
+      map['static_endpoint'] = Variable<String>(staticEndpoint.value);
     }
     if (lastSyncMs.present) {
       map['last_sync_ms'] = Variable<int>(lastSyncMs.value);
@@ -2264,6 +2319,7 @@ class PeersCompanion extends UpdateCompanion<Peer> {
           ..write('publicKey: $publicKey, ')
           ..write('displayName: $displayName, ')
           ..write('lastEndpoint: $lastEndpoint, ')
+          ..write('staticEndpoint: $staticEndpoint, ')
           ..write('lastSyncMs: $lastSyncMs, ')
           ..write('lastPushMs: $lastPushMs, ')
           ..write('pairedAt: $pairedAt, ')
@@ -3894,6 +3950,7 @@ typedef $$PeersTableCreateCompanionBuilder =
       required String publicKey,
       Value<String> displayName,
       Value<String?> lastEndpoint,
+      Value<String?> staticEndpoint,
       Value<int> lastSyncMs,
       Value<int> lastPushMs,
       Value<DateTime> pairedAt,
@@ -3906,6 +3963,7 @@ typedef $$PeersTableUpdateCompanionBuilder =
       Value<String> publicKey,
       Value<String> displayName,
       Value<String?> lastEndpoint,
+      Value<String?> staticEndpoint,
       Value<int> lastSyncMs,
       Value<int> lastPushMs,
       Value<DateTime> pairedAt,
@@ -3938,6 +3996,11 @@ class $$PeersTableFilterComposer extends Composer<_$AppDatabase, $PeersTable> {
 
   ColumnFilters<String> get lastEndpoint => $composableBuilder(
     column: $table.lastEndpoint,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get staticEndpoint => $composableBuilder(
+    column: $table.staticEndpoint,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3991,6 +4054,11 @@ class $$PeersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get staticEndpoint => $composableBuilder(
+    column: $table.staticEndpoint,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get lastSyncMs => $composableBuilder(
     column: $table.lastSyncMs,
     builder: (column) => ColumnOrderings(column),
@@ -4034,6 +4102,11 @@ class $$PeersTableAnnotationComposer
 
   GeneratedColumn<String> get lastEndpoint => $composableBuilder(
     column: $table.lastEndpoint,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get staticEndpoint => $composableBuilder(
+    column: $table.staticEndpoint,
     builder: (column) => column,
   );
 
@@ -4088,6 +4161,7 @@ class $$PeersTableTableManager
                 Value<String> publicKey = const Value.absent(),
                 Value<String> displayName = const Value.absent(),
                 Value<String?> lastEndpoint = const Value.absent(),
+                Value<String?> staticEndpoint = const Value.absent(),
                 Value<int> lastSyncMs = const Value.absent(),
                 Value<int> lastPushMs = const Value.absent(),
                 Value<DateTime> pairedAt = const Value.absent(),
@@ -4098,6 +4172,7 @@ class $$PeersTableTableManager
                 publicKey: publicKey,
                 displayName: displayName,
                 lastEndpoint: lastEndpoint,
+                staticEndpoint: staticEndpoint,
                 lastSyncMs: lastSyncMs,
                 lastPushMs: lastPushMs,
                 pairedAt: pairedAt,
@@ -4110,6 +4185,7 @@ class $$PeersTableTableManager
                 required String publicKey,
                 Value<String> displayName = const Value.absent(),
                 Value<String?> lastEndpoint = const Value.absent(),
+                Value<String?> staticEndpoint = const Value.absent(),
                 Value<int> lastSyncMs = const Value.absent(),
                 Value<int> lastPushMs = const Value.absent(),
                 Value<DateTime> pairedAt = const Value.absent(),
@@ -4120,6 +4196,7 @@ class $$PeersTableTableManager
                 publicKey: publicKey,
                 displayName: displayName,
                 lastEndpoint: lastEndpoint,
+                staticEndpoint: staticEndpoint,
                 lastSyncMs: lastSyncMs,
                 lastPushMs: lastPushMs,
                 pairedAt: pairedAt,

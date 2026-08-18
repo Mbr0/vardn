@@ -67,11 +67,14 @@ class ProcessedEvents extends Table {
 
 /// Paired peers we sync with. `publicKey` is the X25519 public key (base64).
 /// `lastSyncMs` is the highest event timestamp we've successfully pulled from them.
+/// `staticEndpoint` is a user-configured `host:port` (e.g. a Tailscale IP or
+/// MagicDNS name) used when the peer is not visible via mDNS.
 class Peers extends Table {
   TextColumn get id => text()(); // peer device id (= public key fingerprint)
   TextColumn get publicKey => text()();
   TextColumn get displayName => text().withDefault(const Constant(''))();
   TextColumn get lastEndpoint => text().nullable()();
+  TextColumn get staticEndpoint => text().nullable()();
   IntColumn get lastSyncMs => integer().withDefault(const Constant(0))();
   IntColumn get lastPushMs => integer().withDefault(const Constant(0))();
   DateTimeColumn get pairedAt => dateTime().clientDefault(_utcNow)();
@@ -87,13 +90,14 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'vardn'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) await m.createTable(processedEvents);
           if (from < 3) await m.createTable(peers);
+          if (from < 4) await m.addColumn(peers, peers.staticEndpoint);
         },
       );
 }
