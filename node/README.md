@@ -74,6 +74,7 @@ Or compile once and run the binary: `dart compile exe bin/vardn_node.dart -o var
 ~/.vardn-node/
   identity.json            # X25519 keypair + display name
   events/<deviceId>/<ts>-<type>-<eventId>.json
+  blobs/<sha256-hex>       # note attachments (images), content-addressed
 ```
 
 Same event format and watermark semantics as the app's own outbox, so the

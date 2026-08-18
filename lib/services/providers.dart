@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart' show StateProvider;
 
 import '../data/database.dart';
+import 'blobs/blob_store.dart';
 import 'event_log/device_id.dart';
 import 'event_log/event_writer.dart';
 import 'identity/device_identity.dart';
@@ -42,16 +43,22 @@ final eventApplierProvider = FutureProvider<EventApplier>((ref) async {
   return EventApplier(db: db, deviceId: deviceId);
 });
 
+final blobStoreProvider = FutureProvider<BlobStore>((ref) async {
+  return BlobStore.create();
+});
+
 final syncEngineProvider = FutureProvider<SyncEngine>((ref) async {
   final db = ref.watch(databaseProvider);
   final identity = await ref.watch(deviceIdentityProvider.future);
   final writer = await ref.watch(eventWriterProvider.future);
   final applier = await ref.watch(eventApplierProvider.future);
+  final blobs = await ref.watch(blobStoreProvider.future);
   final engine = SyncEngine(
     db: db,
     identity: identity,
     writer: writer,
     applier: applier,
+    blobs: blobs,
   );
   ref.onDispose(engine.dispose);
   return engine;

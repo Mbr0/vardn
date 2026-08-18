@@ -5,6 +5,7 @@ import 'package:args/args.dart';
 import 'package:path/path.dart' as p;
 import 'package:qr/qr.dart';
 
+import 'package:vardn_node/blob_store.dart';
 import 'package:vardn_node/event_store.dart';
 import 'package:vardn_node/identity.dart';
 import 'package:vardn_node/server.dart';
@@ -46,7 +47,8 @@ Future<void> main(List<String> argv) async {
   final identity =
       await NodeIdentity.load(dataDir, displayName: args['name'] as String?);
   final store = RelayEventStore(Directory(p.join(dataDir.path, 'events')));
-  final server = NodeServer(identity: identity, store: store);
+  final blobs = NodeBlobStore(Directory(p.join(dataDir.path, 'blobs')));
+  final server = NodeServer(identity: identity, store: store, blobs: blobs);
   await server.start(address: bind, port: port);
 
   final advertiseHost = (args['advertise-host'] as String?) ??

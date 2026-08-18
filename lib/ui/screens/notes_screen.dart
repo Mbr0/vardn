@@ -109,11 +109,14 @@ class _NoteCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blocks = ref.watch(noteBlocksProvider(note.id)).value ?? const [];
     final preview = blocks
-        .where((b) => b.type != 'checklist' && b.content.trim().isNotEmpty)
+        .where((b) =>
+            (b.type == 'text' || b.type == 'link') &&
+            b.content.trim().isNotEmpty)
         .map((b) => b.content.trim())
         .firstOrNull;
     final checklist = blocks.where((b) => b.type == 'checklist').toList();
     final checked = checklist.where((b) => b.checked).length;
+    final images = blocks.where((b) => b.type == 'image').length;
 
     return Card(
       child: ListTile(
@@ -148,6 +151,7 @@ class _NoteCard extends ConsumerWidget {
               child: Text(
                 [
                   if (checklist.isNotEmpty) '☑ $checked/${checklist.length}',
+                  if (images > 0) '📷 $images',
                   DateFormat.yMd().add_Hm().format(note.updatedAt.toLocal()),
                 ].join(' · '),
                 style: Theme.of(context).textTheme.bodySmall,

@@ -5,6 +5,9 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
+import 'dart:typed_data';
+
+import 'blob_store.dart';
 import 'event_store.dart';
 import 'identity.dart';
 
@@ -21,10 +24,12 @@ class NodeServer {
   NodeServer({
     required this.identity,
     required this.store,
+    required this.blobs,
   });
 
   final NodeIdentity identity;
   final RelayEventStore store;
+  final NodeBlobStore blobs;
   final DateTime _startedAt = DateTime.now().toUtc();
 
   HttpServer? _server;
@@ -35,6 +40,9 @@ class NodeServer {
       ..get('/identity', _identityHandler)
       ..get('/events', _eventsGetHandler)
       ..post('/events', _eventsPostHandler)
+      ..get('/blobs/<hash>/exists', _blobExistsHandler)
+      ..get('/blobs/<hash>', _blobGetHandler)
+      ..post('/blobs/<hash>', _blobPostHandler)
       ..get('/status', _statusHandler);
     _server = await shelf_io.serve(router.call, address, port);
   }
@@ -72,12 +80,31 @@ class NodeServer {
     }
   }
 
+  Future<Response> _blobExistsHandler(Request req, String hash) async =>
+      _json({'exists': await blobs.exists(hash)});
+
+  Future<Response> _blobGetHandler(Request req, String hash) async {
+    final bytes = await blobs.read(hash);
+    if (bytes == null) return Response.notFound('unknown blob');
+    return Response.ok(bytes,
+        headers: {'content-type': 'application/octet-stream'});
+  }
+
+  Future<Response> _blobPostHandler(Request req, String hash) async {
+    final bytes = Uint8List.fromList(
+        await req.read().fold<List<int>>([], (a, b) => a..addAll(b)));
+    final ok = await blobs.putVerified(hash, bytes);
+    if (!ok) return Response.badRequest(body: 'hash mismatch');
+    return _json({'stored': true});
+  }
+
   Future<Response> _statusHandler(Request _) async => _json({
         'id': identity.id,
         'displayName': identity.displayName,
         'startedAt': _startedAt.toIso8601String(),
         'latestMs': await store.latestTimestampMs(),
         'eventsByDevice': await store.countsByDevice(),
+        'blobs': await blobs.count(),
       });
 
   static Response _json(Object data) => Response.ok(jsonEncode(data),

@@ -10,7 +10,9 @@ A Canopy Studio product.
 
 - Flutter + Drift (SQLite)
 - Todos (lists, tags, due dates) and block-based notes (text, checklists,
-  links — reorderable)
+  links, images — reorderable)
+- Images sync as content-addressed blobs (SHA-256) over `/blobs` routes,
+  verified on receipt and replicated lazily between peers and the node
 - LAN peer discovery via `_vardn._tcp`
 - Event-log sync between paired devices
 - Optional always-on relay peer (`node/`, pure Dart) for sync when devices

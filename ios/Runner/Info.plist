@@ -32,6 +32,8 @@
 	<array>
 		<string>_vardn._tcp</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach photos to your notes.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan a pairing QR code from another device.</string>
 	<key>NSLocalNetworkUsageDescription</key>

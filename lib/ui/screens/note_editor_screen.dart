@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/database.dart';
+import '../../services/blobs/blob_store.dart';
 import '../../services/mutation_service.dart';
 import '../../services/providers.dart';
 
@@ -42,9 +44,32 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 
   Future<void> _addBlock(List<NoteBlock> blocks, String type) async {
+    if (type == 'image') return _addImage(blocks);
     final last = blocks.isEmpty ? 0.0 : blocks.last.position;
     await (await _mutations)
         .createBlock(noteId: widget.noteId, type: type, position: last + 1);
+  }
+
+  Future<void> _addImage(List<NoteBlock> blocks) async {
+    // Resize on pick so a phone photo becomes a few hundred KB, not 10 MB —
+    // these bytes get replicated to every paired device.
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final store = await ref.read(blobStoreProvider.future);
+    final hash = await store.put(bytes);
+    final last = blocks.isEmpty ? 0.0 : blocks.last.position;
+    await (await _mutations).createBlock(
+      noteId: widget.noteId,
+      type: 'image',
+      content: hash,
+      position: last + 1,
+    );
   }
 
   Future<void> _reorder(List<NoteBlock> blocks, int oldIndex, int newIndex) async {
@@ -165,6 +190,11 @@ class _AddBlockBar extends StatelessWidget {
               label: const Text('Link'),
               onPressed: () => onAdd('link'),
             ),
+            TextButton.icon(
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('Image'),
+              onPressed: () => onAdd('image'),
+            ),
           ],
         ),
       ),
@@ -208,6 +238,7 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
   @override
   Widget build(BuildContext context) {
     final block = widget.block;
+    if (block.type == 'image') return _buildImage(context, block);
     // Accept remote edits only while this block isn't being typed in.
     if (!_focus.hasFocus && _ctrl.text != block.content) {
       _ctrl.text = block.content;
@@ -286,6 +317,63 @@ class _BlockTileState extends ConsumerState<_BlockTile> {
                 const PopupMenuItem(value: 'link', child: Text('Make link')),
               const PopupMenuDivider(),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImage(BuildContext context, NoteBlock block) {
+    final storeAsync = ref.watch(blobStoreProvider);
+    final store = storeAsync.value;
+    final file = store != null && BlobStore.looksLikeHash(block.content)
+        ? store.fileFor(block.content)
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ReorderableDragStartListener(
+            index: widget.index,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12, left: 4, right: 4),
+              child: Icon(Icons.drag_indicator,
+                  size: 18, color: Theme.of(context).colorScheme.outlineVariant),
+            ),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: file != null && file.existsSync()
+                  ? Image.file(file, fit: BoxFit.fitWidth)
+                  : Container(
+                      height: 140,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.cloud_download_outlined),
+                          const SizedBox(height: 8),
+                          Text('Image syncing…',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert,
+                size: 18, color: Theme.of(context).colorScheme.outlineVariant),
+            onSelected: (value) async {
+              if (value == 'delete') {
+                await (await _mutations).deleteBlock(block.id);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),
         ],

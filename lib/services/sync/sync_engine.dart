@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:http/http.dart' as http;
 
 import '../../data/database.dart';
+import '../blobs/blob_store.dart';
 import '../event_log/event_writer.dart';
 import '../identity/device_identity.dart';
 import 'event_applier.dart';
@@ -18,16 +19,19 @@ class SyncEngine {
     required this.identity,
     required this.writer,
     required this.applier,
+    required this.blobs,
   });
 
   final AppDatabase db;
   final DeviceIdentity identity;
   final EventWriter writer;
   final EventApplier applier;
+  final BlobStore blobs;
 
   late final SyncServer server = SyncServer(
     identity: identity,
     writer: writer,
+    blobs: blobs,
     onPeerEvents: _ingestFromPeer,
   );
   late final PeerDiscovery discovery = PeerDiscovery(identity: identity);
@@ -156,6 +160,9 @@ class SyncEngine {
         if (events.isNotEmpty) {
           await applier.applyAll(events);
         }
+        // Fetch bytes for any image blocks whose blob we don't have yet —
+        // also self-heals blobs that failed to transfer on a previous cycle.
+        await _pullMissingBlobs(endpoint);
         final latest = (body['latestMs'] as num?)?.toInt() ?? peer.lastSyncMs;
         if (latest > peer.lastSyncMs) {
           await (db.update(db.peers)..where((t) => t.id.equals(peerId))).write(
@@ -179,6 +186,7 @@ class SyncEngine {
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         reachable = true;
+        await _pushBlobs(endpoint, ours);
         final ourLatest = await writer.latestTimestampMs();
         await (db.update(db.peers)..where((t) => t.id.equals(peerId))).write(
           PeersCompanion(lastPushMs: Value(ourLatest)),
@@ -186,6 +194,59 @@ class SyncEngine {
       }
     } catch (_) {/* peer offline */}
     return reachable;
+  }
+
+  /// Download blobs referenced by live image blocks that are missing locally.
+  Future<void> _pullMissingBlobs(PeerEndpoint endpoint) async {
+    final imageBlocks = await (db.select(db.noteBlocks)
+          ..where((t) => t.type.equals('image') & t.deletedAt.isNull()))
+        .get();
+    for (final block in imageBlocks) {
+      final hash = block.content;
+      if (!BlobStore.looksLikeHash(hash) || await blobs.exists(hash)) continue;
+      try {
+        final res = await http
+            .get(endpoint.uri('/blobs/$hash'))
+            .timeout(const Duration(seconds: 30));
+        if (res.statusCode == 200) {
+          await blobs.putVerified(hash, res.bodyBytes);
+        }
+      } catch (_) {/* try again next cycle */}
+    }
+  }
+
+  /// Upload blobs referenced by events we just pushed, unless the peer
+  /// already has them.
+  Future<void> _pushBlobs(
+      PeerEndpoint endpoint, List<Map<String, Object?>> pushedEvents) async {
+    final hashes = <String>{};
+    for (final e in pushedEvents) {
+      final type = e['type'];
+      if (type is! String || !type.startsWith('note.block.')) continue;
+      final payload = (e['payload'] as Map?)?.cast<String, Object?>();
+      final content = payload?['content'];
+      if (content is String && BlobStore.looksLikeHash(content)) {
+        hashes.add(content);
+      }
+    }
+    for (final hash in hashes) {
+      final bytes = await blobs.read(hash);
+      if (bytes == null) continue;
+      try {
+        final check = await http
+            .get(endpoint.uri('/blobs/$hash/exists'))
+            .timeout(const Duration(seconds: 8));
+        if (check.statusCode == 200 &&
+            (jsonDecode(check.body) as Map)['exists'] == true) {
+          continue;
+        }
+        await http
+            .post(endpoint.uri('/blobs/$hash'),
+                headers: {'content-type': 'application/octet-stream'},
+                body: bytes)
+            .timeout(const Duration(seconds: 30));
+      } catch (_) {/* peer offline — the pull side will self-heal */}
+    }
   }
 
   Future<void> _ingestFromPeer(List<Map<String, Object?>> events) async {

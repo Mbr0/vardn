@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'dart:typed_data';
+
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 
+import '../blobs/blob_store.dart';
 import '../event_log/event_writer.dart';
 import '../identity/device_identity.dart';
 
@@ -16,11 +19,13 @@ class SyncServer {
   SyncServer({
     required this.identity,
     required this.writer,
+    required this.blobs,
     required this.onPeerEvents,
   });
 
   final DeviceIdentity identity;
   final EventWriter writer;
+  final BlobStore blobs;
   final Future<void> Function(List<Map<String, Object?>> events) onPeerEvents;
 
   HttpServer? _server;
@@ -32,7 +37,10 @@ class SyncServer {
     final router = Router()
       ..get('/identity', _identityHandler)
       ..get('/events', _eventsGetHandler)
-      ..post('/events', _eventsPostHandler);
+      ..post('/events', _eventsPostHandler)
+      ..get('/blobs/<hash>/exists', _blobExistsHandler)
+      ..get('/blobs/<hash>', _blobGetHandler)
+      ..post('/blobs/<hash>', _blobPostHandler);
     _server = await shelf_io.serve(router.call, InternetAddress.anyIPv4, 0);
   }
 
@@ -72,6 +80,29 @@ class SyncServer {
         ((json['events'] as List?) ?? const []).cast<Map<String, Object?>>();
     await onPeerEvents(events);
     return Response.ok(jsonEncode({'accepted': events.length}),
+        headers: {'content-type': 'application/json'});
+  }
+
+  Future<Response> _blobExistsHandler(Request req, String hash) async {
+    return Response.ok(
+      jsonEncode({'exists': await blobs.exists(hash)}),
+      headers: {'content-type': 'application/json'},
+    );
+  }
+
+  Future<Response> _blobGetHandler(Request req, String hash) async {
+    final bytes = await blobs.read(hash);
+    if (bytes == null) return Response.notFound('unknown blob');
+    return Response.ok(bytes,
+        headers: {'content-type': 'application/octet-stream'});
+  }
+
+  Future<Response> _blobPostHandler(Request req, String hash) async {
+    final bytes = Uint8List.fromList(
+        await req.read().fold<List<int>>([], (a, b) => a..addAll(b)));
+    final ok = await blobs.putVerified(hash, bytes);
+    if (!ok) return Response.badRequest(body: 'hash mismatch');
+    return Response.ok(jsonEncode({'stored': true}),
         headers: {'content-type': 'application/json'});
   }
 }
