@@ -90,7 +90,137 @@ class EventApplier {
       case EventType.tagRemoved:
         final name = payload['tag'] as String?;
         if (name != null) await _removeTag(entityId, name);
+      case EventType.noteCreated:
+      case EventType.noteUpdated:
+        await _upsertNote(entityId, eventAt, payload);
+      case EventType.noteDeleted:
+        await _tombstoneNote(entityId, eventAt);
+      case EventType.blockCreated:
+      case EventType.blockUpdated:
+        await _upsertBlock(entityId, eventAt, payload);
+      case EventType.blockDeleted:
+        await _tombstoneBlock(entityId, eventAt);
     }
+  }
+
+  Future<void> _upsertNote(
+      String id, DateTime eventAt, Map<String, Object?> payload) async {
+    final existing = await (db.select(db.notes)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      await db.into(db.notes).insert(
+            NotesCompanion.insert(
+              id: Value(id),
+              title: Value((payload['title'] as String?) ?? ''),
+              color: Value(payload['color'] as String?),
+              pinned: Value((payload['pinned'] as bool?) ?? false),
+              createdAt: Value(eventAt),
+              updatedAt: Value(eventAt),
+            ),
+          );
+      return;
+    }
+    if (eventAt.isBefore(existing.updatedAt)) return;
+    await (db.update(db.notes)..where((t) => t.id.equals(id))).write(
+      NotesCompanion(
+        title: payload.containsKey('title')
+            ? Value(payload['title'] as String)
+            : const Value.absent(),
+        color: payload.containsKey('color')
+            ? Value(payload['color'] as String?)
+            : const Value.absent(),
+        pinned: payload.containsKey('pinned')
+            ? Value(payload['pinned'] as bool)
+            : const Value.absent(),
+        updatedAt: Value(eventAt),
+      ),
+    );
+  }
+
+  Future<void> _tombstoneNote(String id, DateTime eventAt) async {
+    final existing = await (db.select(db.notes)..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      await db.into(db.notes).insert(
+            NotesCompanion.insert(
+              id: Value(id),
+              createdAt: Value(eventAt),
+              updatedAt: Value(eventAt),
+              deletedAt: Value(eventAt),
+            ),
+          );
+      return;
+    }
+    await (db.update(db.notes)..where((t) => t.id.equals(id))).write(
+      NotesCompanion(deletedAt: Value(eventAt), updatedAt: Value(eventAt)),
+    );
+  }
+
+  Future<void> _upsertBlock(
+      String id, DateTime eventAt, Map<String, Object?> payload) async {
+    final existing = await (db.select(db.noteBlocks)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      final noteId = payload['noteId'] as String?;
+      // A block update can arrive before its create; without the noteId we
+      // can't place it, so drop it — the eventual create carries everything.
+      if (noteId == null) return;
+      await db.into(db.noteBlocks).insert(
+            NoteBlocksCompanion.insert(
+              id: Value(id),
+              noteId: noteId,
+              type: Value((payload['type'] as String?) ?? 'text'),
+              content: Value((payload['content'] as String?) ?? ''),
+              checked: Value((payload['checked'] as bool?) ?? false),
+              position: Value((payload['position'] as num?)?.toDouble() ?? 0),
+              createdAt: Value(eventAt),
+              updatedAt: Value(eventAt),
+            ),
+          );
+      return;
+    }
+    if (eventAt.isBefore(existing.updatedAt)) return;
+    await (db.update(db.noteBlocks)..where((t) => t.id.equals(id))).write(
+      NoteBlocksCompanion(
+        type: payload.containsKey('type')
+            ? Value(payload['type'] as String)
+            : const Value.absent(),
+        content: payload.containsKey('content')
+            ? Value(payload['content'] as String)
+            : const Value.absent(),
+        checked: payload.containsKey('checked')
+            ? Value(payload['checked'] as bool)
+            : const Value.absent(),
+        position: payload.containsKey('position')
+            ? Value((payload['position'] as num).toDouble())
+            : const Value.absent(),
+        updatedAt: Value(eventAt),
+      ),
+    );
+  }
+
+  Future<void> _tombstoneBlock(String id, DateTime eventAt) async {
+    final existing = await (db.select(db.noteBlocks)
+          ..where((t) => t.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      // Unknown note — park the tombstone under a placeholder so a late
+      // create is still superseded (same convergence trick as todos).
+      await db.into(db.noteBlocks).insert(
+            NoteBlocksCompanion.insert(
+              id: Value(id),
+              noteId: '',
+              createdAt: Value(eventAt),
+              updatedAt: Value(eventAt),
+              deletedAt: Value(eventAt),
+            ),
+          );
+      return;
+    }
+    await (db.update(db.noteBlocks)..where((t) => t.id.equals(id))).write(
+      NoteBlocksCompanion(deletedAt: Value(eventAt), updatedAt: Value(eventAt)),
+    );
   }
 
   Future<void> _upsertTodo(

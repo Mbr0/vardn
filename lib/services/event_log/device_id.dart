@@ -8,6 +8,9 @@ import '../identity/device_identity.dart';
 class DeviceId {
   DeviceId._(this.value);
 
+  /// For tests only — production code must go through [load].
+  DeviceId.forTesting(this.value);
+
   final String value;
 
   static DeviceId? _cached;

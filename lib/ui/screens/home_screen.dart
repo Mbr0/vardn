@@ -18,17 +18,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchCtrl = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    Future.microtask(_bootSync);
-  }
-
-  Future<void> _bootSync() async {
-    final engine = await ref.read(syncEngineProvider.future);
-    await engine.start();
-  }
-
-  @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();

@@ -173,6 +173,128 @@ class MutationService {
     await _emit(EventType.todoDeleted, id, {});
   }
 
+  // ─── Notes ────────────────────────────────────────────────────────────
+
+  Future<Note> createNote({String title = '', String? color}) async {
+    final now = _now();
+    final id = const Uuid().v4();
+    await db.into(db.notes).insert(NotesCompanion.insert(
+          id: Value(id),
+          title: Value(title),
+          color: Value(color),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+    await _emit(EventType.noteCreated, id, {
+      'title': title,
+      'color': ?color,
+    });
+    return (await (db.select(db.notes)..where((t) => t.id.equals(id)))
+        .getSingle());
+  }
+
+  Future<void> updateNote(
+    String id, {
+    String? title,
+    String? color,
+    bool? clearColor,
+    bool? pinned,
+  }) async {
+    final now = _now();
+    await (db.update(db.notes)..where((t) => t.id.equals(id))).write(
+      NotesCompanion(
+        title: title == null ? const Value.absent() : Value(title),
+        color: clearColor == true
+            ? const Value(null)
+            : (color == null ? const Value.absent() : Value(color)),
+        pinned: pinned == null ? const Value.absent() : Value(pinned),
+        updatedAt: Value(now),
+      ),
+    );
+    final patch = <String, Object?>{};
+    if (title != null) patch['title'] = title;
+    if (clearColor == true) {
+      patch['color'] = null;
+    } else if (color != null) {
+      patch['color'] = color;
+    }
+    if (pinned != null) patch['pinned'] = pinned;
+    await _emit(EventType.noteUpdated, id, patch);
+  }
+
+  Future<void> deleteNote(String id) async {
+    final now = _now();
+    await (db.update(db.notes)..where((t) => t.id.equals(id))).write(
+      NotesCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+    );
+    await _emit(EventType.noteDeleted, id, {});
+  }
+
+  // ─── Note blocks ──────────────────────────────────────────────────────
+
+  Future<NoteBlock> createBlock({
+    required String noteId,
+    String type = 'text',
+    String content = '',
+    bool checked = false,
+    required double position,
+  }) async {
+    final now = _now();
+    final id = const Uuid().v4();
+    await db.into(db.noteBlocks).insert(NoteBlocksCompanion.insert(
+          id: Value(id),
+          noteId: noteId,
+          type: Value(type),
+          content: Value(content),
+          checked: Value(checked),
+          position: Value(position),
+          createdAt: Value(now),
+          updatedAt: Value(now),
+        ));
+    await _emit(EventType.blockCreated, id, {
+      'noteId': noteId,
+      'type': type,
+      'content': content,
+      'checked': checked,
+      'position': position,
+    });
+    return (await (db.select(db.noteBlocks)..where((t) => t.id.equals(id)))
+        .getSingle());
+  }
+
+  Future<void> updateBlock(
+    String id, {
+    String? type,
+    String? content,
+    bool? checked,
+    double? position,
+  }) async {
+    final now = _now();
+    await (db.update(db.noteBlocks)..where((t) => t.id.equals(id))).write(
+      NoteBlocksCompanion(
+        type: type == null ? const Value.absent() : Value(type),
+        content: content == null ? const Value.absent() : Value(content),
+        checked: checked == null ? const Value.absent() : Value(checked),
+        position: position == null ? const Value.absent() : Value(position),
+        updatedAt: Value(now),
+      ),
+    );
+    final patch = <String, Object?>{};
+    if (type != null) patch['type'] = type;
+    if (content != null) patch['content'] = content;
+    if (checked != null) patch['checked'] = checked;
+    if (position != null) patch['position'] = position;
+    await _emit(EventType.blockUpdated, id, patch);
+  }
+
+  Future<void> deleteBlock(String id) async {
+    final now = _now();
+    await (db.update(db.noteBlocks)..where((t) => t.id.equals(id))).write(
+      NoteBlocksCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+    );
+    await _emit(EventType.blockDeleted, id, {});
+  }
+
   // ─── Tags ─────────────────────────────────────────────────────────────
 
   Future<Tag> ensureTag(String name) async {
